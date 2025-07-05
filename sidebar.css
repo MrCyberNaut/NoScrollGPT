@@ -1,0 +1,201 @@
+/* ChatGPT Prompt Sidebar Styles */
+#chatgpt-prompt-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100vh;
+    background: rgba(32, 33, 36, 0.95);
+    border-left: 1px solid #404040;
+    z-index: 10000;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+  }
+  
+  #chatgpt-prompt-sidebar.collapsed {
+    transform: translateX(260px);
+  }
+  
+  #chatgpt-prompt-sidebar.hidden {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  
+  .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid #404040;
+    background: rgba(32, 33, 36, 0.98);
+  }
+  
+  .sidebar-title {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+  }
+  
+  .sidebar-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  .control-btn {
+    background: none;
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: background-color 0.2s;
+  }
+  
+  .control-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .toggle-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(32, 33, 36, 0.9);
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    padding: 8px 4px;
+    border-radius: 4px 0 0 4px;
+    font-size: 12px;
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    z-index: 10001;
+  }
+  
+  .toggle-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .sidebar-content {
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+    padding: 10px;
+  }
+  
+  .prompt-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    margin: 4px 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+    border-left: 3px solid transparent;
+  }
+  
+  .prompt-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateX(2px);
+    border-left-color: #10a37f;
+  }
+  
+  .prompt-number {
+    color: #10a37f;
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 20px;
+    text-align: center;
+    background: rgba(16, 163, 127, 0.2);
+    border-radius: 10px;
+    padding: 2px 6px;
+  }
+  
+  .prompt-text {
+    color: #ffffff;
+    font-size: 13px;
+    line-height: 1.4;
+    flex: 1;
+    word-wrap: break-word;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  
+  .transparency-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .transparency-slider {
+    width: 60px;
+    height: 4px;
+    background: #404040;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  
+  .transparency-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #10a37f;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  
+  .transparency-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: #10a37f;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+  
+  .clear-btn {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  
+  .clear-btn:hover {
+    background: rgba(239, 68, 68, 0.3);
+  }
+  
+  .no-prompts {
+    color: #888;
+    font-size: 12px;
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+  }
+  
+  /* Scrollbar styling */
+  .sidebar-content::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .sidebar-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .sidebar-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+  }
+  
+  .sidebar-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+  }

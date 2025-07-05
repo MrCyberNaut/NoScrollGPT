@@ -18,6 +18,10 @@
     transform: translateX(260px);
   }
   
+  #chatgpt-prompt-sidebar.collapsed .toggle-btn {
+    right: -40px;
+  }
+  
   #chatgpt-prompt-sidebar.hidden {
     transform: translateX(100%);
     opacity: 0;
@@ -61,8 +65,8 @@
   }
   
   .toggle-btn {
-    position: absolute;
-    right: 8px;
+    position: fixed;
+    right: 0px;
     top: 50%;
     transform: translateY(-50%);
     background: rgba(32, 33, 36, 0.9);
@@ -74,7 +78,8 @@
     font-size: 12px;
     writing-mode: vertical-lr;
     text-orientation: mixed;
-    z-index: 10001;
+    z-index: 10002;
+    transition: right 0.3s ease-in-out;
   }
   
   .toggle-btn:hover {

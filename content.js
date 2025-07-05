@@ -7,15 +7,41 @@ class ChatGPTPromptSidebar {
       this.currentChatId = null;
       this.prompts = [];
       this.observer = null;
+      this.urlObserver = null;
+      this.retryCount = 0;
+      this.maxRetries = 10;
       this.init();
     }
   
     init() {
+      this.loadSidebarState();
       this.createSidebar();
       this.getCurrentChatId();
       this.loadPromptsForCurrentChat();
       this.setupMessageObserver();
       this.setupChatChangeObserver();
+      this.loadExistingPrompts();
+    }
+  
+    async loadSidebarState() {
+      try {
+        const result = await chrome.storage.local.get(['sidebarCollapsed', 'sidebarTransparency']);
+        this.isCollapsed = result.sidebarCollapsed || false;
+        this.transparency = result.sidebarTransparency || 0.95;
+      } catch (error) {
+        console.error('Error loading sidebar state:', error);
+      }
+    }
+  
+    async saveSidebarState() {
+      try {
+        await chrome.storage.local.set({
+          sidebarCollapsed: this.isCollapsed,
+          sidebarTransparency: this.transparency
+        });
+      } catch (error) {
+        console.error('Error saving sidebar state:', error);
+      }
     }
   
     createSidebar() {
@@ -44,17 +70,25 @@ class ChatGPTPromptSidebar {
       `;
   
       document.body.appendChild(this.sidebar);
+      
+      // Apply saved state
+      this.sidebar.classList.toggle('collapsed', this.isCollapsed);
+      this.updateTransparency();
+      
       this.setupSidebarEvents();
     }
   
     setupSidebarEvents() {
       // Toggle collapse/expand
       const toggleBtn = this.sidebar.querySelector('.toggle-btn');
+      toggleBtn.textContent = this.isCollapsed ? '▶' : '◀';
+      toggleBtn.title = this.isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
       toggleBtn.addEventListener('click', () => {
         this.isCollapsed = !this.isCollapsed;
         this.sidebar.classList.toggle('collapsed', this.isCollapsed);
         toggleBtn.textContent = this.isCollapsed ? '▶' : '◀';
         toggleBtn.title = this.isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
+        this.saveSidebarState();
       });
   
       // Transparency control
@@ -62,6 +96,7 @@ class ChatGPTPromptSidebar {
       transparencySlider.addEventListener('input', (e) => {
         this.transparency = parseFloat(e.target.value);
         this.updateTransparency();
+        this.saveSidebarState();
       });
   
       // Clear prompts
@@ -135,20 +170,49 @@ class ChatGPTPromptSidebar {
     setupChatChangeObserver() {
       // Observer for URL changes (chat switching)
       let lastUrl = window.location.href;
-      const urlObserver = new MutationObserver(() => {
+      this.urlObserver = new MutationObserver(() => {
         if (window.location.href !== lastUrl) {
           lastUrl = window.location.href;
+          console.log('URL changed, reloading prompts...');
           setTimeout(() => {
             this.getCurrentChatId();
             this.loadPromptsForCurrentChat();
-          }, 1000);
+            this.loadExistingPrompts();
+          }, 1500);
         }
       });
   
-      urlObserver.observe(document.body, {
+      this.urlObserver.observe(document.body, {
         childList: true,
         subtree: true
       });
+  
+      // Also listen for popstate events
+      window.addEventListener('popstate', () => {
+        setTimeout(() => {
+          this.getCurrentChatId();
+          this.loadPromptsForCurrentChat();
+          this.loadExistingPrompts();
+        }, 1000);
+      });
+    }
+  
+    loadExistingPrompts() {
+      // Load prompts that already exist on the page
+      setTimeout(() => {
+        const existingMessages = document.querySelectorAll('[data-message-author-role="user"]');
+        existingMessages.forEach((messageNode) => {
+          const messageText = this.extractMessageText(messageNode);
+          if (messageText && !this.prompts.some(p => p.text === messageText)) {
+            this.addPrompt(messageText, messageNode, false); // false = don't save immediately
+          }
+        });
+        
+        if (existingMessages.length > 0) {
+          this.savePrompts(); // Save once after loading all
+          this.updateSidebarContent();
+        }
+      }, 1000);
     }
   
     findChatContainer() {
@@ -206,7 +270,7 @@ class ChatGPTPromptSidebar {
       return messageNode.textContent.trim();
     }
   
-    addPrompt(text, messageNode) {
+    addPrompt(text, messageNode, shouldSave = true) {
       const prompt = {
         text: text,
         timestamp: Date.now(),
@@ -214,8 +278,10 @@ class ChatGPTPromptSidebar {
       };
   
       this.prompts.push(prompt);
-      this.savePrompts();
-      this.updateSidebarContent();
+      if (shouldSave) {
+        this.savePrompts();
+        this.updateSidebarContent();
+      }
     }
   
     generateMessageId(messageNode) {
@@ -306,30 +372,52 @@ class ChatGPTPromptSidebar {
     if (window.location.hostname.includes('chatgpt.com') || 
         window.location.hostname.includes('chat.openai.com')) {
       
-      // Wait for the page to be fully loaded
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-          setTimeout(() => {
-            promptSidebar = new ChatGPTPromptSidebar();
-          }, 2000);
-        });
-      } else {
-        setTimeout(() => {
-          promptSidebar = new ChatGPTPromptSidebar();
-        }, 2000);
+      // Clean up existing sidebar if it exists
+      if (promptSidebar) {
+        try {
+          if (promptSidebar.observer) {
+            promptSidebar.observer.disconnect();
+          }
+          if (promptSidebar.urlObserver) {
+            promptSidebar.urlObserver.disconnect();
+          }
+          const existingSidebar = document.getElementById('chatgpt-prompt-sidebar');
+          if (existingSidebar) {
+            existingSidebar.remove();
+          }
+        } catch (error) {
+          console.error('Error cleaning up sidebar:', error);
+        }
       }
+  
+      // Initialize new sidebar
+      setTimeout(() => {
+        promptSidebar = new ChatGPTPromptSidebar();
+      }, 2000);
     }
   }
+  
+  // Re-initialize on page changes
+  function reinitializeSidebar() {
+    const existingSidebar = document.getElementById('chatgpt-prompt-sidebar');
+    if (!existingSidebar) {
+      console.log('Sidebar missing, reinitializing...');
+      initializeSidebar();
+    }
+  }
+  
+  // Check for sidebar every 5 seconds and reinitialize if missing
+  setInterval(reinitializeSidebar, 5000);
   
   // Initialize
   initializeSidebar();
   
   // Re-initialize on navigation changes
   window.addEventListener('popstate', () => {
-    setTimeout(() => {
-      if (promptSidebar) {
-        promptSidebar.getCurrentChatId();
-        promptSidebar.loadPromptsForCurrentChat();
-      }
-    }, 1000);
+    setTimeout(reinitializeSidebar, 1000);
+  });
+  
+  // Re-initialize on page focus (in case of refresh)
+  window.addEventListener('focus', () => {
+    setTimeout(reinitializeSidebar, 500);
   });

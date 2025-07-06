@@ -16,6 +16,7 @@ class ChatGPTPromptSidebar {
     this.loadPromptsForCurrentChat();
     this.setupMessageObserver();
     this.setupChatChangeObserver();
+    this.loadExistingMessages();
   }
 
   createSidebar() {
@@ -130,6 +131,16 @@ class ChatGPTPromptSidebar {
         if (mutation.type === 'childList') {
           mutation.addedNodes.forEach((node) => {
             if (node.nodeType === Node.ELEMENT_NODE) {
+              // Only process user messages, ignore assistant messages
+              if (node.getAttribute && node.getAttribute('data-message-author-role') === 'assistant') {
+                return;
+              }
+              
+              // Check if this node contains an assistant message
+              if (node.querySelector && node.querySelector('[data-message-author-role="assistant"]')) {
+                return;
+              }
+              
               this.checkForNewPrompt(node);
             }
           });
@@ -156,6 +167,7 @@ class ChatGPTPromptSidebar {
         setTimeout(() => {
           this.getCurrentChatId();
           this.loadPromptsForCurrentChat();
+          this.loadExistingMessages();
         }, 1000);
       }
     });
@@ -199,6 +211,13 @@ class ChatGPTPromptSidebar {
         this.addPrompt(messageText, messageNode);
       }
     });
+    
+    // Don't process assistant messages
+    if (node.matches && 
+        (node.matches('[data-message-author-role="assistant"]') || 
+         node.querySelector('[data-message-author-role="assistant"]'))) {
+      return;
+    }
   }
 
   extractMessageText(messageNode) {
@@ -246,15 +265,19 @@ class ChatGPTPromptSidebar {
       return;
     }
 
-    const promptsHtml = this.prompts.map((prompt, index) => {
-      const truncatedText = this.truncateText(prompt.text, 60);
-      return `
-        <div class="prompt-item" data-index="${index}">
-          <div class="prompt-number">${index + 1}</div>
-          <div class="prompt-text">${truncatedText}</div>
-        </div>
-      `;
-    }).join('');
+    // Display prompts in reverse order (newest first at the top)
+    const promptsHtml = [...this.prompts]
+      .reverse()
+      .map((prompt, index) => {
+        const reversedIndex = this.prompts.length - index - 1; // Calculate the original index
+        const truncatedText = this.truncateText(prompt.text, 60);
+        return `
+          <div class="prompt-item" data-index="${reversedIndex}">
+            <div class="prompt-number">${this.prompts.length - index}</div>
+            <div class="prompt-text">${truncatedText}</div>
+          </div>
+        `;
+      }).join('');
 
     content.innerHTML = promptsHtml;
 
@@ -312,6 +335,109 @@ class ChatGPTPromptSidebar {
     this.savePrompts();
     this.updateSidebarContent();
   }
+
+  loadExistingMessages() {
+    // Give the page a moment to fully load
+    setTimeout(() => {
+      // Try to find user messages in the current chat
+      const userMessages = document.querySelectorAll('[data-message-author-role="user"]');
+      
+      if (userMessages.length > 0) {
+        console.log(`Found ${userMessages.length} existing user messages`);
+        
+        // Process each message in DOM order (which should match chronological order)
+        const messagesToAdd = [];
+        userMessages.forEach(messageNode => {
+          const messageText = this.extractMessageText(messageNode);
+          if (messageText && !this.prompts.some(p => p.text === messageText)) {
+            messagesToAdd.push({
+              text: messageText,
+              node: messageNode
+            });
+          }
+        });
+        
+        // Add messages in the correct order (oldest first, matching the DOM order)
+        messagesToAdd.forEach(message => {
+          this.addPrompt(message.text, message.node);
+        });
+      } else {
+        // If standard selector fails, try alternative selectors for older chats
+        const alternativeSelectors = [
+          '.text-token-text-user'
+        ];
+        
+        let foundMessages = false;
+        
+        for (const selector of alternativeSelectors) {
+          if (foundMessages) break;
+          
+          const possibleMessages = document.querySelectorAll(selector);
+          if (possibleMessages.length > 0) {
+            console.log(`Trying alternative selector: ${selector}, found ${possibleMessages.length} elements`);
+            
+            // Collect messages first to maintain order
+            const messagesToAdd = [];
+            
+            // Process each potential message
+            possibleMessages.forEach(node => {
+              const text = node.textContent.trim();
+              // Only add user messages, not ChatGPT responses
+              if (text.length > 0 && !this.prompts.some(p => p.text === text)) {
+                messagesToAdd.push({
+                  text: text,
+                  node: node
+                });
+              }
+            });
+            
+            // If we found messages, add them in order and stop trying other selectors
+            if (messagesToAdd.length > 0) {
+              messagesToAdd.forEach(message => {
+                this.addPrompt(message.text, message.node);
+              });
+              foundMessages = true;
+            }
+          }
+        }
+        
+        // If we still haven't found messages, try a more aggressive approach
+        if (!foundMessages) {
+          // Look for message containers that might indicate user messages
+          const messageContainers = document.querySelectorAll('.group');
+          const userMessageContainers = Array.from(messageContainers).filter(container => {
+            // Check if this is likely a user message (not a ChatGPT message)
+            return !container.querySelector('[data-message-author-role="assistant"]') && 
+                   !container.textContent.includes('ChatGPT') &&
+                   !container.textContent.includes('As an AI');
+          });
+          
+          if (userMessageContainers.length > 0) {
+            console.log(`Found ${userMessageContainers.length} possible user message containers`);
+            
+            const messagesToAdd = [];
+            userMessageContainers.forEach(container => {
+              const textElements = container.querySelectorAll('p, .whitespace-pre-wrap');
+              if (textElements.length > 0) {
+                // Get text from the first paragraph or text element
+                const text = textElements[0].textContent.trim();
+                if (text.length > 0 && !this.prompts.some(p => p.text === text)) {
+                  messagesToAdd.push({
+                    text: text,
+                    node: container
+                  });
+                }
+              }
+            });
+            
+            messagesToAdd.forEach(message => {
+              this.addPrompt(message.text, message.node);
+            });
+          }
+        }
+      }
+    }, 2000); // Wait for 2 seconds to ensure the page is fully loaded
+  }
 }
 
 // Initialize the sidebar when the page loads
@@ -329,10 +455,16 @@ function initializeSidebar() {
       if (existingToggle) existingToggle.remove();
     }
     
+    // Check if this is likely an older chat (has content already)
+    const hasExistingContent = document.querySelectorAll('.markdown, [data-message-author-role]').length > 0;
+    
+    // Wait longer for older chats to fully load
+    const delay = hasExistingContent ? 3000 : 2000;
+    
     // Wait for the page to be fully loaded
     setTimeout(() => {
       promptSidebar = new ChatGPTPromptSidebar();
-    }, 2000);
+    }, delay);
   }
 }
 

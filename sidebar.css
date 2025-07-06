@@ -18,10 +18,6 @@
     transform: translateX(260px);
   }
   
-  #chatgpt-prompt-sidebar.collapsed .toggle-btn {
-    right: -40px;
-  }
-  
   #chatgpt-prompt-sidebar.hidden {
     transform: translateX(100%);
     opacity: 0;
@@ -66,20 +62,32 @@
   
   .toggle-btn {
     position: fixed;
-    right: 0px;
+    right: 8px;
     top: 50%;
     transform: translateY(-50%);
-    background: rgba(32, 33, 36, 0.9);
-    border: none;
+    background: rgba(32, 33, 36, 0.95);
+    border: 1px solid #404040;
     color: #ffffff;
     cursor: pointer;
-    padding: 8px 4px;
-    border-radius: 4px 0 0 4px;
-    font-size: 12px;
-    writing-mode: vertical-lr;
-    text-orientation: mixed;
+    padding: 10px 6px;
+    border-radius: 6px 0 0 6px;
+    font-size: 14px;
+    font-weight: bold;
     z-index: 10002;
-    transition: right 0.3s ease-in-out;
+    transition: all 0.3s ease-in-out;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .toggle-btn:hover {
+    background: rgba(16, 163, 127, 0.9);
+    transform: translateY(-50%) translateX(-2px);
+  }
+  
+  .toggle-btn.collapsed {
+    right: 0px;
+    background: rgba(16, 163, 127, 0.9);
+    border-radius: 6px 0 0 6px;
+    padding: 12px 8px;
   }
   
   .toggle-btn:hover {

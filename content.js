@@ -328,42 +328,48 @@ class ChatGPTPromptSidebar {
   }
 
   processMessageContainer(container) {
-    const author = this.getMessageAuthor(container);
-    if (author === 'user') {
-      const messageText = this.extractMessageText(container);
-      if (messageText && !this.prompts.some(p => p.text === messageText)) {
-        this.addPrompt(messageText, container);
+    try {
+      const author = this.getMessageAuthor(container);
+      if (author === 'user') {
+        const messageText = this.extractMessageText(container);
+        if (messageText && !this.prompts.some(p => p.text === messageText)) {
+          this.addPrompt(messageText, container);
+        }
       }
+    } catch (err) {
+      console.warn('Failed to process message:', err);
     }
   }
+  
 
   getMessageAuthor(container) {
-    // Method 1: Check the data-message-author-role attribute directly or on a parent
+    // Strongest signal — official role attribute
     const authorRoleEl = container.querySelector('[data-message-author-role]');
     if (authorRoleEl) {
       return authorRoleEl.getAttribute('data-message-author-role');
     }
+  
     const parentWithRole = container.closest('[data-message-author-role]');
     if (parentWithRole) {
-        return parentWithRole.getAttribute('data-message-author-role');
+      return parentWithRole.getAttribute('data-message-author-role');
     }
-
-    // Method 2: If no attribute, check for the assistant's logo. This is a strong negative signal for a user prompt.
-    const hasAssistantLogo = container.querySelector('svg.text-white');
-    if (hasAssistantLogo) {
+  
+    // Fallback: Look for assistant icons — this strongly signals an assistant response
+    if (container.querySelector('svg.text-white') || container.querySelector('svg.h-4.w-4')) {
       return 'assistant';
     }
-
-    // Method 3: If it's not from the assistant, and it has text, it's very likely a user message.
-    // This correctly identifies user prompts in older layouts that lack data attributes.
-    const hasTextContent = container.querySelector('div[class*="prose"], .whitespace-pre-wrap');
-    if (hasTextContent) {
+  
+    // Final fallback — if it has prose AND NO assistant logo, cautiously assume it's user
+    const hasText = container.querySelector('div[class*="prose"], .whitespace-pre-wrap');
+    const hasAIIndicators = container.innerHTML.includes('chatgpt-logo') || container.innerHTML.includes('svg');
+  
+    if (hasText && !hasAIIndicators) {
       return 'user';
     }
-
-    // Fallback: If none of the above, we can't be sure. Default to assistant to be safe.
+  
     return 'assistant';
   }
+  
 }
 
 // Initialize the sidebar when the page loads

@@ -10,12 +10,26 @@ class ChatGPTPromptSidebar {
     this.init();
   }
 
+  destroy() {
+    // Disconnect the main message observer
+    if (this.observer) {
+      this.observer.disconnect();
+    }
+    // Remove the UI elements from the DOM
+    if (this.sidebar) {
+      this.sidebar.remove();
+    }
+    if (this.toggleBtn) {
+      this.toggleBtn.remove();
+    }
+    console.log('ChatGPT Prompt Sidebar destroyed.');
+  }
+
   init() {
     this.createSidebar();
     this.getCurrentChatId();
     this.loadPromptsForCurrentChat();
     this.setupMessageObserver();
-    this.setupChatChangeObserver();
     this.loadExistingMessages();
   }
 
@@ -87,6 +101,10 @@ class ChatGPTPromptSidebar {
         this.clearPrompts();
       }
     });
+
+    this.sidebar.style.background = `rgba(32, 33, 36, ${this.transparency})`;
+    const header = this.sidebar.querySelector('.sidebar-header');
+    header.style.background = `rgba(32, 33, 36, ${Math.min(this.transparency + 0.05, 1)})`;
   }
 
   updateTransparency() {
@@ -131,17 +149,11 @@ class ChatGPTPromptSidebar {
         if (mutation.type === 'childList') {
           mutation.addedNodes.forEach((node) => {
             if (node.nodeType === Node.ELEMENT_NODE) {
-              // Only process user messages, ignore assistant messages
-              if (node.getAttribute && node.getAttribute('data-message-author-role') === 'assistant') {
-                return;
-              }
-              
-              // Check if this node contains an assistant message
-              if (node.querySelector && node.querySelector('[data-message-author-role="assistant"]')) {
-                return;
-              }
-              
-              this.checkForNewPrompt(node);
+              // This node could be a message container or a wrapper
+              const messageContainers = this.findMessageContainers(node);
+              messageContainers.forEach(container => {
+                this.processMessageContainer(container);
+              });
             }
           });
         }
@@ -156,26 +168,6 @@ class ChatGPTPromptSidebar {
         subtree: true
       });
     }
-  }
-
-  setupChatChangeObserver() {
-    // Observer for URL changes (chat switching)
-    let lastUrl = window.location.href;
-    const urlObserver = new MutationObserver(() => {
-      if (window.location.href !== lastUrl) {
-        lastUrl = window.location.href;
-        setTimeout(() => {
-          this.getCurrentChatId();
-          this.loadPromptsForCurrentChat();
-          this.loadExistingMessages();
-        }, 1000);
-      }
-    });
-
-    urlObserver.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
   }
 
   findChatContainer() {
@@ -196,38 +188,17 @@ class ChatGPTPromptSidebar {
   }
 
   checkForNewPrompt(node) {
-    // Look for user messages in the new nodes
-    const userMessages = node.querySelectorAll ? 
-      node.querySelectorAll('[data-message-author-role="user"]') :
-      [];
-
-    if (userMessages.length === 0 && node.matches && node.matches('[data-message-author-role="user"]')) {
-      userMessages.push(node);
-    }
-
-    userMessages.forEach((messageNode) => {
-      const messageText = this.extractMessageText(messageNode);
-      if (messageText && !this.prompts.some(p => p.text === messageText)) {
-        this.addPrompt(messageText, messageNode);
-      }
-    });
-    
-    // Don't process assistant messages
-    if (node.matches && 
-        (node.matches('[data-message-author-role="assistant"]') || 
-         node.querySelector('[data-message-author-role="assistant"]'))) {
-      return;
-    }
+    // This function is being replaced by the new logic in setupMessageObserver
+    // and processMessageContainer. It can be removed or left for reference.
   }
 
   extractMessageText(messageNode) {
-    // Extract text from various possible structures
+    // The message text is usually inside a container with one of these classes or selectors.
     const textSelectors = [
-      '.whitespace-pre-wrap',
-      '[data-message-text]',
-      '.markdown',
-      'div[class*="prose"]',
-      'p'
+      'div[class*="prose"]',  // Main text container for new layouts
+      '.whitespace-pre-wrap', // Common for code blocks and text
+      '.markdown',            // General markdown container
+      'p'                     // Paragraphs as a fallback
     ];
 
     for (const selector of textSelectors) {
@@ -237,6 +208,8 @@ class ChatGPTPromptSidebar {
       }
     }
 
+    // If no specific text container is found, it might be an older layout.
+    // This is a last resort and might grab extra text, but it's better than nothing.
     return messageNode.textContent.trim();
   }
 
@@ -337,106 +310,59 @@ class ChatGPTPromptSidebar {
   }
 
   loadExistingMessages() {
-    // Give the page a moment to fully load
     setTimeout(() => {
-      // Try to find user messages in the current chat
-      const userMessages = document.querySelectorAll('[data-message-author-role="user"]');
-      
-      if (userMessages.length > 0) {
-        console.log(`Found ${userMessages.length} existing user messages`);
-        
-        // Process each message in DOM order (which should match chronological order)
-        const messagesToAdd = [];
-        userMessages.forEach(messageNode => {
-          const messageText = this.extractMessageText(messageNode);
-          if (messageText && !this.prompts.some(p => p.text === messageText)) {
-            messagesToAdd.push({
-              text: messageText,
-              node: messageNode
-            });
-          }
-        });
-        
-        // Add messages in the correct order (oldest first, matching the DOM order)
-        messagesToAdd.forEach(message => {
-          this.addPrompt(message.text, message.node);
-        });
-      } else {
-        // If standard selector fails, try alternative selectors for older chats
-        const alternativeSelectors = [
-          '.text-token-text-user'
-        ];
-        
-        let foundMessages = false;
-        
-        for (const selector of alternativeSelectors) {
-          if (foundMessages) break;
-          
-          const possibleMessages = document.querySelectorAll(selector);
-          if (possibleMessages.length > 0) {
-            console.log(`Trying alternative selector: ${selector}, found ${possibleMessages.length} elements`);
-            
-            // Collect messages first to maintain order
-            const messagesToAdd = [];
-            
-            // Process each potential message
-            possibleMessages.forEach(node => {
-              const text = node.textContent.trim();
-              // Only add user messages, not ChatGPT responses
-              if (text.length > 0 && !this.prompts.some(p => p.text === text)) {
-                messagesToAdd.push({
-                  text: text,
-                  node: node
-                });
-              }
-            });
-            
-            // If we found messages, add them in order and stop trying other selectors
-            if (messagesToAdd.length > 0) {
-              messagesToAdd.forEach(message => {
-                this.addPrompt(message.text, message.node);
-              });
-              foundMessages = true;
-            }
-          }
-        }
-        
-        // If we still haven't found messages, try a more aggressive approach
-        if (!foundMessages) {
-          // Look for message containers that might indicate user messages
-          const messageContainers = document.querySelectorAll('.group');
-          const userMessageContainers = Array.from(messageContainers).filter(container => {
-            // Check if this is likely a user message (not a ChatGPT message)
-            return !container.querySelector('[data-message-author-role="assistant"]') && 
-                   !container.textContent.includes('ChatGPT') &&
-                   !container.textContent.includes('As an AI');
-          });
-          
-          if (userMessageContainers.length > 0) {
-            console.log(`Found ${userMessageContainers.length} possible user message containers`);
-            
-            const messagesToAdd = [];
-            userMessageContainers.forEach(container => {
-              const textElements = container.querySelectorAll('p, .whitespace-pre-wrap');
-              if (textElements.length > 0) {
-                // Get text from the first paragraph or text element
-                const text = textElements[0].textContent.trim();
-                if (text.length > 0 && !this.prompts.some(p => p.text === text)) {
-                  messagesToAdd.push({
-                    text: text,
-                    node: container
-                  });
-                }
-              }
-            });
-            
-            messagesToAdd.forEach(message => {
-              this.addPrompt(message.text, message.node);
-            });
-          }
-        }
+      const allMessages = this.findMessageContainers(document);
+      console.log(`Found ${allMessages.length} potential message containers.`);
+      allMessages.forEach(container => {
+        this.processMessageContainer(container);
+      });
+    }, 2000);
+  }
+
+  findMessageContainers(rootNode) {
+    // A common selector for message containers, which contains both avatar and text
+    // The 'group' class seems to be consistently used for each message turn.
+    // We also check for the presence of 'data-message-id' to be more specific.
+    const selector = 'div.group, div[data-message-id]';
+    return rootNode.querySelectorAll(selector);
+  }
+
+  processMessageContainer(container) {
+    const author = this.getMessageAuthor(container);
+    if (author === 'user') {
+      const messageText = this.extractMessageText(container);
+      if (messageText && !this.prompts.some(p => p.text === messageText)) {
+        this.addPrompt(messageText, container);
       }
-    }, 2000); // Wait for 2 seconds to ensure the page is fully loaded
+    }
+  }
+
+  getMessageAuthor(container) {
+    // Method 1: Check the data-message-author-role attribute directly or on a parent
+    const authorRoleEl = container.querySelector('[data-message-author-role]');
+    if (authorRoleEl) {
+      return authorRoleEl.getAttribute('data-message-author-role');
+    }
+    const parentWithRole = container.closest('[data-message-author-role]');
+    if (parentWithRole) {
+        return parentWithRole.getAttribute('data-message-author-role');
+    }
+
+    // Method 2: If no attribute, check for the assistant's logo. This is a strong negative signal for a user prompt.
+    const hasAssistantLogo = container.querySelector('svg.text-white');
+    if (hasAssistantLogo) {
+      return 'assistant';
+    }
+
+    // Method 3: If it's not from the assistant, and it has text, it's very likely a user message.
+    // This correctly identifies user prompts in older layouts that lack data attributes.
+    const hasTextContent = container.querySelector('div[class*="prose"], .whitespace-pre-wrap');
+    if (hasTextContent) {
+      return 'user';
+    }
+
+    // Fallback: If none of the above, we can't be sure. Default to assistant to be safe.
+    return 'assistant';
   }
 }
 
@@ -449,10 +375,7 @@ function initializeSidebar() {
     
     // Clean up existing sidebar first
     if (promptSidebar) {
-      const existingSidebar = document.getElementById('chatgpt-prompt-sidebar');
-      const existingToggle = document.getElementById('chatgpt-sidebar-toggle');
-      if (existingSidebar) existingSidebar.remove();
-      if (existingToggle) existingToggle.remove();
+      promptSidebar.destroy();
     }
     
     // Check if this is likely an older chat (has content already)
